@@ -1566,6 +1566,104 @@ def generate_html(json_path, output_dir, github_repo=None):
     )
 
 
+def _group_conversations(loglines):
+    """Group loglines into conversations. Shared by HTML and Markdown generators."""
+    conversations = []
+    current_conv = None
+    for entry in loglines:
+        log_type = entry.get("type")
+        timestamp = entry.get("timestamp", "")
+        is_compact_summary = entry.get("isCompactSummary", False)
+        message_data = entry.get("message", {})
+        if not message_data:
+            continue
+        message_json = json.dumps(message_data)
+        is_user_prompt = False
+        user_text = None
+        if log_type == "user":
+            content = message_data.get("content", "")
+            text = extract_text_from_content(content)
+            if text:
+                is_user_prompt = True
+                user_text = text
+        if is_user_prompt:
+            if current_conv:
+                conversations.append(current_conv)
+            current_conv = {
+                "user_text": user_text,
+                "timestamp": timestamp,
+                "messages": [(log_type, message_json, timestamp)],
+                "is_continuation": bool(is_compact_summary),
+            }
+        elif current_conv:
+            current_conv["messages"].append((log_type, message_json, timestamp))
+    if current_conv:
+        conversations.append(current_conv)
+    return conversations
+
+
+def _render_message_content_markdown(message_data):
+    """Render a message's content blocks as Markdown."""
+    content = message_data.get("content", "")
+    if isinstance(content, str):
+        return content
+    elif isinstance(content, list):
+        parts = []
+        for block in content:
+            rendered = render_content_block_markdown(block)
+            if rendered:
+                parts.append(rendered)
+        return "\n\n".join(parts)
+    return str(content)
+
+
+def generate_markdown(json_path, output_dir, github_repo=None):
+    """Generate a single Markdown file from a session file.
+
+    Returns the Path to the generated .md file.
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(exist_ok=True)
+
+    data = parse_session_file(json_path)
+    loglines = data.get("loglines", [])
+
+    if github_repo is None:
+        github_repo = detect_github_repo(loglines)
+
+    conversations = _group_conversations(loglines)
+    md_parts = []
+
+    for conv in conversations:
+        for log_type, message_json, timestamp in conv["messages"]:
+            if not message_json:
+                continue
+            try:
+                message_data = json.loads(message_json)
+            except json.JSONDecodeError:
+                continue
+
+            if log_type == "user":
+                if is_tool_result_message(message_data):
+                    role = "Tool reply"
+                else:
+                    role = "User"
+                md_parts.append(f"### {role}")
+                md_parts.append(f"*{timestamp}*\n")
+                md_parts.append(_render_message_content_markdown(message_data))
+            elif log_type == "assistant":
+                md_parts.append("### Assistant")
+                md_parts.append(f"*{timestamp}*\n")
+                md_parts.append(_render_message_content_markdown(message_data))
+
+        md_parts.append("---\n")
+
+    markdown_content = "\n\n".join(md_parts)
+    md_path = output_dir / "transcript.md"
+    md_path.write_text(markdown_content, encoding="utf-8")
+    return md_path
+
+
 @click.group(cls=DefaultGroup, default="local", default_if_no_args=True)
 @click.version_option(None, "-v", "--version", package_name="claude-code-transcripts")
 def cli():

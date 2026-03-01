@@ -28,6 +28,7 @@ from claude_code_transcripts import (
     get_session_summary,
     find_local_sessions,
     render_content_block_markdown,
+    generate_markdown,
 )
 
 
@@ -1758,3 +1759,51 @@ class TestMarkdownRendering:
         result = render_content_block_markdown(block)
         assert "First task" in result
         assert "Second task" in result
+
+
+class TestGenerateMarkdown:
+    """Tests for generate_markdown function."""
+
+    def test_generates_markdown_file(self, output_dir):
+        """Test that generate_markdown creates a .md file."""
+        fixture_path = Path(__file__).parent / "sample_session.jsonl"
+        result_path = generate_markdown(fixture_path, output_dir)
+        assert result_path.exists()
+        assert result_path.suffix == ".md"
+
+    def test_markdown_contains_user_messages(self, output_dir):
+        """Test that user messages appear in the Markdown output."""
+        fixture_path = Path(__file__).parent / "sample_session.jsonl"
+        result_path = generate_markdown(fixture_path, output_dir)
+        content = result_path.read_text()
+        assert "Create a hello world function" in content
+
+    def test_markdown_contains_assistant_messages(self, output_dir):
+        """Test that assistant messages appear in the Markdown output."""
+        fixture_path = Path(__file__).parent / "sample_session.jsonl"
+        result_path = generate_markdown(fixture_path, output_dir)
+        content = result_path.read_text()
+        assert "I'll create that function for you" in content
+
+    def test_markdown_contains_tool_calls(self, output_dir):
+        """Test that tool calls appear in the Markdown output."""
+        fixture_path = Path(__file__).parent / "sample_session.jsonl"
+        result_path = generate_markdown(fixture_path, output_dir)
+        content = result_path.read_text()
+        assert "Write" in content
+        assert "hello.py" in content
+
+    def test_markdown_has_role_headers(self, output_dir):
+        """Test that messages have User/Assistant headers."""
+        fixture_path = Path(__file__).parent / "sample_session.jsonl"
+        result_path = generate_markdown(fixture_path, output_dir)
+        content = result_path.read_text()
+        assert "### User" in content
+        assert "### Assistant" in content
+
+    def test_markdown_has_timestamps(self, output_dir):
+        """Test that timestamps appear in the output."""
+        fixture_path = Path(__file__).parent / "sample_session.jsonl"
+        result_path = generate_markdown(fixture_path, output_dir)
+        content = result_path.read_text()
+        assert "2025-12-24" in content
