@@ -1831,7 +1831,7 @@ def open_in_editor(file_path):
     """Open a file in the user's preferred editor, or system default."""
     editor = os.environ.get("EDITOR") or os.environ.get("VISUAL")
     if editor:
-        subprocess.Popen([editor, str(file_path)])
+        subprocess.run([editor, str(file_path)])
     else:
         click.launch(str(file_path))
 

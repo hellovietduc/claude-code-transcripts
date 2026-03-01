@@ -748,8 +748,8 @@ class TestMarkdownFlag:
         launched = []
         monkeypatch.setenv("EDITOR", "vim")
         monkeypatch.setattr(
-            "claude_code_transcripts.subprocess.Popen",
-            lambda args, **kw: launched.append(args) or type("P", (), {"pid": 1})(),
+            "claude_code_transcripts.subprocess.run",
+            lambda args, **kw: launched.append(args),
         )
 
         runner = CliRunner()
