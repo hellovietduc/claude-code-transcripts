@@ -1797,6 +1797,8 @@ def local_cmd(
     if use_markdown:
         md_path = generate_markdown(session_file, output, github_repo=repo)
         click.echo(f"Generated {md_path.resolve()}")
+        if open_browser or auto_open:
+            open_in_editor(md_path.resolve())
     else:
         generate_html(session_file, output, github_repo=repo)
 
@@ -1823,6 +1825,15 @@ def local_cmd(
         if open_browser or auto_open:
             index_url = (output / "index.html").resolve().as_uri()
             webbrowser.open(index_url)
+
+
+def open_in_editor(file_path):
+    """Open a file in the user's preferred editor, or system default."""
+    editor = os.environ.get("EDITOR") or os.environ.get("VISUAL")
+    if editor:
+        subprocess.Popen([editor, str(file_path)])
+    else:
+        click.launch(str(file_path))
 
 
 def is_url(path):
@@ -1941,6 +1952,8 @@ def json_cmd(
     if use_markdown:
         md_path = generate_markdown(json_file_path, output, github_repo=repo)
         click.echo(f"Generated {md_path.resolve()}")
+        if open_browser or auto_open:
+            open_in_editor(md_path.resolve())
     else:
         generate_html(json_file_path, output, github_repo=repo)
 
@@ -2293,6 +2306,8 @@ def web_cmd(
             session_data, output, github_repo=repo
         )
         click.echo(f"Generated {md_path.resolve()}")
+        if open_browser or auto_open:
+            open_in_editor(md_path.resolve())
     else:
         click.echo(f"Generating HTML in {output}/...")
         generate_html_from_session_data(session_data, output, github_repo=repo)
