@@ -1633,6 +1633,52 @@ def generate_markdown(json_path, output_dir, github_repo=None):
     return md_path
 
 
+def generate_markdown_from_session_data(session_data, output_dir, github_repo=None):
+    """Generate Markdown from session data dict (instead of file path).
+
+    Returns the Path to the generated .md file.
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(exist_ok=True, parents=True)
+
+    loglines = session_data.get("loglines", [])
+
+    if github_repo is None:
+        github_repo = detect_github_repo(loglines)
+
+    conversations = _group_conversations(loglines)
+    md_parts = []
+
+    for conv in conversations:
+        for log_type, message_json, timestamp in conv["messages"]:
+            if not message_json:
+                continue
+            try:
+                message_data = json.loads(message_json)
+            except json.JSONDecodeError:
+                continue
+
+            if log_type == "user":
+                if is_tool_result_message(message_data):
+                    role = "Tool reply"
+                else:
+                    role = "User"
+                md_parts.append(f"### {role}")
+                md_parts.append(f"*{timestamp}*\n")
+                md_parts.append(_render_message_content_markdown(message_data))
+            elif log_type == "assistant":
+                md_parts.append("### Assistant")
+                md_parts.append(f"*{timestamp}*\n")
+                md_parts.append(_render_message_content_markdown(message_data))
+
+        md_parts.append("---\n")
+
+    markdown_content = "\n\n".join(md_parts)
+    md_path = output_dir / "transcript.md"
+    md_path.write_text(markdown_content, encoding="utf-8")
+    return md_path
+
+
 @click.group(cls=DefaultGroup, default="local", default_if_no_args=True)
 @click.version_option(None, "-v", "--version", package_name="claude-code-transcripts")
 def cli():
@@ -2141,6 +2187,12 @@ def generate_html_from_session_data(session_data, output_dir, github_repo=None):
     is_flag=True,
     help="Open the generated index.html in your default browser (default if no -o specified).",
 )
+@click.option(
+    "--markdown",
+    "use_markdown",
+    is_flag=True,
+    help="Output as a single Markdown file instead of HTML.",
+)
 def web_cmd(
     session_id,
     output,
@@ -2151,6 +2203,7 @@ def web_cmd(
     gist,
     include_json,
     open_browser,
+    use_markdown,
 ):
     """Select and convert a web session from the Claude API to HTML.
 
@@ -2225,33 +2278,40 @@ def web_cmd(
         output = Path(tempfile.gettempdir()) / f"claude-session-{session_id}"
 
     output = Path(output)
-    click.echo(f"Generating HTML in {output}/...")
-    generate_html_from_session_data(session_data, output, github_repo=repo)
 
-    # Show output directory
-    click.echo(f"Output: {output.resolve()}")
+    if use_markdown:
+        md_path = generate_markdown_from_session_data(
+            session_data, output, github_repo=repo
+        )
+        click.echo(f"Generated {md_path.resolve()}")
+    else:
+        click.echo(f"Generating HTML in {output}/...")
+        generate_html_from_session_data(session_data, output, github_repo=repo)
 
-    # Save JSON session data if requested
-    if include_json:
-        output.mkdir(exist_ok=True)
-        json_dest = output / f"{session_id}.json"
-        with open(json_dest, "w") as f:
-            json.dump(session_data, f, indent=2)
-        json_size_kb = json_dest.stat().st_size / 1024
-        click.echo(f"JSON: {json_dest} ({json_size_kb:.1f} KB)")
+        # Show output directory
+        click.echo(f"Output: {output.resolve()}")
 
-    if gist:
-        # Inject gist preview JS and create gist
-        inject_gist_preview_js(output)
-        click.echo("Creating GitHub gist...")
-        gist_id, gist_url = create_gist(output)
-        preview_url = f"https://gisthost.github.io/?{gist_id}/index.html"
-        click.echo(f"Gist: {gist_url}")
-        click.echo(f"Preview: {preview_url}")
+        # Save JSON session data if requested
+        if include_json:
+            output.mkdir(exist_ok=True)
+            json_dest = output / f"{session_id}.json"
+            with open(json_dest, "w") as f:
+                json.dump(session_data, f, indent=2)
+            json_size_kb = json_dest.stat().st_size / 1024
+            click.echo(f"JSON: {json_dest} ({json_size_kb:.1f} KB)")
 
-    if open_browser or auto_open:
-        index_url = (output / "index.html").resolve().as_uri()
-        webbrowser.open(index_url)
+        if gist:
+            # Inject gist preview JS and create gist
+            inject_gist_preview_js(output)
+            click.echo("Creating GitHub gist...")
+            gist_id, gist_url = create_gist(output)
+            preview_url = f"https://gisthost.github.io/?{gist_id}/index.html"
+            click.echo(f"Gist: {gist_url}")
+            click.echo(f"Preview: {preview_url}")
+
+        if open_browser or auto_open:
+            index_url = (output / "index.html").resolve().as_uri()
+            webbrowser.open(index_url)
 
 
 @cli.command("all")
