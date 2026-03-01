@@ -698,3 +698,41 @@ class TestWebCommandRepoFiltering:
         # Should show (no repo) placeholder
         assert "(no repo)" in display
         assert "Fix the bug" in display
+
+
+class TestMarkdownFlag:
+    """Tests for --markdown flag on CLI commands."""
+
+    def test_json_command_markdown_flag(self, output_dir):
+        """Test that json command with --markdown produces a .md file."""
+        jsonl_file = output_dir / "test.jsonl"
+        jsonl_file.write_text(
+            '{"type": "user", "timestamp": "2025-01-01T10:00:00.000Z", "message": {"role": "user", "content": "Hello"}}\n'
+            '{"type": "assistant", "timestamp": "2025-01-01T10:00:05.000Z", "message": {"role": "assistant", "content": [{"type": "text", "text": "Hi there!"}]}}\n'
+        )
+        md_output = output_dir / "md_output"
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["json", str(jsonl_file), "-o", str(md_output), "--markdown"],
+        )
+        assert result.exit_code == 0
+        assert (md_output / "transcript.md").exists()
+        content = (md_output / "transcript.md").read_text()
+        assert "Hello" in content
+        assert "Hi there!" in content
+
+    def test_json_command_markdown_no_html(self, output_dir):
+        """Test that --markdown does not produce HTML files."""
+        jsonl_file = output_dir / "test.jsonl"
+        jsonl_file.write_text(
+            '{"type": "user", "timestamp": "2025-01-01T10:00:00.000Z", "message": {"role": "user", "content": "Hello"}}\n'
+        )
+        md_output = output_dir / "md_output"
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["json", str(jsonl_file), "-o", str(md_output), "--markdown"],
+        )
+        assert result.exit_code == 0
+        assert not (md_output / "index.html").exists()

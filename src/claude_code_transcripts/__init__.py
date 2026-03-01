@@ -1679,7 +1679,15 @@ def cli():
     default=10,
     help="Maximum number of sessions to show (default: 10)",
 )
-def local_cmd(output, output_auto, repo, gist, include_json, open_browser, limit):
+@click.option(
+    "--markdown",
+    "use_markdown",
+    is_flag=True,
+    help="Output as a single Markdown file instead of HTML.",
+)
+def local_cmd(
+    output, output_auto, repo, gist, include_json, open_browser, limit, use_markdown
+):
     """Select and convert a local Claude Code session to HTML."""
     projects_folder = Path.home() / ".claude" / "projects"
 
@@ -1730,31 +1738,36 @@ def local_cmd(output, output_auto, repo, gist, include_json, open_browser, limit
         output = Path(tempfile.gettempdir()) / f"claude-session-{session_file.stem}"
 
     output = Path(output)
-    generate_html(session_file, output, github_repo=repo)
 
-    # Show output directory
-    click.echo(f"Output: {output.resolve()}")
+    if use_markdown:
+        md_path = generate_markdown(session_file, output, github_repo=repo)
+        click.echo(f"Generated {md_path.resolve()}")
+    else:
+        generate_html(session_file, output, github_repo=repo)
 
-    # Copy JSONL file to output directory if requested
-    if include_json:
-        output.mkdir(exist_ok=True)
-        json_dest = output / session_file.name
-        shutil.copy(session_file, json_dest)
-        json_size_kb = json_dest.stat().st_size / 1024
-        click.echo(f"JSONL: {json_dest} ({json_size_kb:.1f} KB)")
+        # Show output directory
+        click.echo(f"Output: {output.resolve()}")
 
-    if gist:
-        # Inject gist preview JS and create gist
-        inject_gist_preview_js(output)
-        click.echo("Creating GitHub gist...")
-        gist_id, gist_url = create_gist(output)
-        preview_url = f"https://gisthost.github.io/?{gist_id}/index.html"
-        click.echo(f"Gist: {gist_url}")
-        click.echo(f"Preview: {preview_url}")
+        # Copy JSONL file to output directory if requested
+        if include_json:
+            output.mkdir(exist_ok=True)
+            json_dest = output / session_file.name
+            shutil.copy(session_file, json_dest)
+            json_size_kb = json_dest.stat().st_size / 1024
+            click.echo(f"JSONL: {json_dest} ({json_size_kb:.1f} KB)")
 
-    if open_browser or auto_open:
-        index_url = (output / "index.html").resolve().as_uri()
-        webbrowser.open(index_url)
+        if gist:
+            # Inject gist preview JS and create gist
+            inject_gist_preview_js(output)
+            click.echo("Creating GitHub gist...")
+            gist_id, gist_url = create_gist(output)
+            preview_url = f"https://gisthost.github.io/?{gist_id}/index.html"
+            click.echo(f"Gist: {gist_url}")
+            click.echo(f"Preview: {preview_url}")
+
+        if open_browser or auto_open:
+            index_url = (output / "index.html").resolve().as_uri()
+            webbrowser.open(index_url)
 
 
 def is_url(path):
@@ -1831,7 +1844,15 @@ def fetch_url_to_tempfile(url):
     is_flag=True,
     help="Open the generated index.html in your default browser (default if no -o specified).",
 )
-def json_cmd(json_file, output, output_auto, repo, gist, include_json, open_browser):
+@click.option(
+    "--markdown",
+    "use_markdown",
+    is_flag=True,
+    help="Output as a single Markdown file instead of HTML.",
+)
+def json_cmd(
+    json_file, output, output_auto, repo, gist, include_json, open_browser, use_markdown
+):
     """Convert a Claude Code session JSON/JSONL file or URL to HTML."""
     # Handle URL input
     if is_url(json_file):
@@ -1861,31 +1882,36 @@ def json_cmd(json_file, output, output_auto, repo, gist, include_json, open_brow
         )
 
     output = Path(output)
-    generate_html(json_file_path, output, github_repo=repo)
 
-    # Show output directory
-    click.echo(f"Output: {output.resolve()}")
+    if use_markdown:
+        md_path = generate_markdown(json_file_path, output, github_repo=repo)
+        click.echo(f"Generated {md_path.resolve()}")
+    else:
+        generate_html(json_file_path, output, github_repo=repo)
 
-    # Copy JSON file to output directory if requested
-    if include_json:
-        output.mkdir(exist_ok=True)
-        json_dest = output / json_file_path.name
-        shutil.copy(json_file_path, json_dest)
-        json_size_kb = json_dest.stat().st_size / 1024
-        click.echo(f"JSON: {json_dest} ({json_size_kb:.1f} KB)")
+        # Show output directory
+        click.echo(f"Output: {output.resolve()}")
 
-    if gist:
-        # Inject gist preview JS and create gist
-        inject_gist_preview_js(output)
-        click.echo("Creating GitHub gist...")
-        gist_id, gist_url = create_gist(output)
-        preview_url = f"https://gisthost.github.io/?{gist_id}/index.html"
-        click.echo(f"Gist: {gist_url}")
-        click.echo(f"Preview: {preview_url}")
+        # Copy JSON file to output directory if requested
+        if include_json:
+            output.mkdir(exist_ok=True)
+            json_dest = output / json_file_path.name
+            shutil.copy(json_file_path, json_dest)
+            json_size_kb = json_dest.stat().st_size / 1024
+            click.echo(f"JSON: {json_dest} ({json_size_kb:.1f} KB)")
 
-    if open_browser or auto_open:
-        index_url = (output / "index.html").resolve().as_uri()
-        webbrowser.open(index_url)
+        if gist:
+            # Inject gist preview JS and create gist
+            inject_gist_preview_js(output)
+            click.echo("Creating GitHub gist...")
+            gist_id, gist_url = create_gist(output)
+            preview_url = f"https://gisthost.github.io/?{gist_id}/index.html"
+            click.echo(f"Gist: {gist_url}")
+            click.echo(f"Preview: {preview_url}")
+
+        if open_browser or auto_open:
+            index_url = (output / "index.html").resolve().as_uri()
+            webbrowser.open(index_url)
 
 
 def resolve_credentials(token, org_uuid):
