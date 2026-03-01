@@ -1353,20 +1353,22 @@ def inject_gist_preview_js(output_dir):
             html_file.write_text(content, encoding="utf-8")
 
 
-def create_gist(output_dir, public=False):
-    """Create a GitHub gist from the HTML files in output_dir.
+def create_gist(output_dir, public=False, file_glob="*.html"):
+    """Create a GitHub gist from files in output_dir matching file_glob.
 
     Returns the gist ID on success, or raises click.ClickException on failure.
     """
     output_dir = Path(output_dir)
-    html_files = list(output_dir.glob("*.html"))
-    if not html_files:
-        raise click.ClickException("No HTML files found to upload to gist.")
+    files = list(output_dir.glob(file_glob))
+    if not files:
+        raise click.ClickException(
+            f"No files matching {file_glob} found to upload to gist."
+        )
 
     # Build the gh gist create command
     # gh gist create file1 file2 ... --public/--private
     cmd = ["gh", "gist", "create"]
-    cmd.extend(str(f) for f in sorted(html_files))
+    cmd.extend(str(f) for f in sorted(files))
     if public:
         cmd.append("--public")
 
@@ -1797,7 +1799,11 @@ def local_cmd(
     if use_markdown:
         md_path = generate_markdown(session_file, output, github_repo=repo)
         click.echo(f"Generated {md_path.resolve()}")
-        if open_browser or auto_open:
+        if gist:
+            click.echo("Creating GitHub gist...")
+            _gist_id, gist_url = create_gist(output, file_glob="*.md")
+            click.echo(f"Gist: {gist_url}")
+        elif open_browser or auto_open:
             open_in_editor(md_path.resolve())
     else:
         generate_html(session_file, output, github_repo=repo)
@@ -1952,7 +1958,11 @@ def json_cmd(
     if use_markdown:
         md_path = generate_markdown(json_file_path, output, github_repo=repo)
         click.echo(f"Generated {md_path.resolve()}")
-        if open_browser or auto_open:
+        if gist:
+            click.echo("Creating GitHub gist...")
+            _gist_id, gist_url = create_gist(output, file_glob="*.md")
+            click.echo(f"Gist: {gist_url}")
+        elif open_browser or auto_open:
             open_in_editor(md_path.resolve())
     else:
         generate_html(json_file_path, output, github_repo=repo)
@@ -2306,7 +2316,11 @@ def web_cmd(
             session_data, output, github_repo=repo
         )
         click.echo(f"Generated {md_path.resolve()}")
-        if open_browser or auto_open:
+        if gist:
+            click.echo("Creating GitHub gist...")
+            _gist_id, gist_url = create_gist(output, file_glob="*.md")
+            click.echo(f"Gist: {gist_url}")
+        elif open_browser or auto_open:
             open_in_editor(md_path.resolve())
     else:
         click.echo(f"Generating HTML in {output}/...")

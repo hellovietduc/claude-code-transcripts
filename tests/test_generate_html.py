@@ -570,6 +570,47 @@ class TestInjectGistPreviewJs:
         assert "DOMContentLoaded" in GIST_PREVIEW_JS
 
 
+class TestCreateGistMarkdown:
+    """Tests for create_gist with file_glob parameter for markdown files."""
+
+    def test_creates_gist_with_markdown_files(self, output_dir, monkeypatch):
+        """Test that create_gist uploads .md files when file_glob='*.md'."""
+        import subprocess
+
+        (output_dir / "transcript.md").write_text(
+            "# Transcript\n\nHello world", encoding="utf-8"
+        )
+
+        captured_cmd = []
+        mock_result = subprocess.CompletedProcess(
+            args=["gh", "gist", "create"],
+            returncode=0,
+            stdout="https://gist.github.com/testuser/md123\n",
+            stderr="",
+        )
+
+        def mock_run(*args, **kwargs):
+            captured_cmd.extend(args[0] if args else kwargs.get("args", []))
+            return mock_result
+
+        monkeypatch.setattr(subprocess, "run", mock_run)
+
+        gist_id, gist_url = create_gist(output_dir, file_glob="*.md")
+
+        assert gist_id == "md123"
+        assert gist_url == "https://gist.github.com/testuser/md123"
+        assert any("transcript.md" in str(c) for c in captured_cmd)
+
+    def test_raises_on_no_markdown_files(self, output_dir):
+        """Test that error is raised when no .md files exist."""
+        import click
+
+        with pytest.raises(click.ClickException) as exc_info:
+            create_gist(output_dir, file_glob="*.md")
+
+        assert "No files matching" in str(exc_info.value)
+
+
 class TestCreateGist:
     """Tests for the create_gist function."""
 
@@ -611,7 +652,7 @@ class TestCreateGist:
         with pytest.raises(click.ClickException) as exc_info:
             create_gist(output_dir)
 
-        assert "No HTML files found" in str(exc_info.value)
+        assert "No files matching *.html" in str(exc_info.value)
 
     def test_raises_on_gh_cli_error(self, output_dir, monkeypatch):
         """Test that error is raised when gh CLI fails."""
