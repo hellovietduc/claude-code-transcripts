@@ -840,6 +840,102 @@ def render_content_block(block):
         return format_json(block)
 
 
+def render_content_block_markdown(block):
+    """Render a single content block as Markdown text."""
+    if not isinstance(block, dict):
+        return str(block)
+
+    block_type = block.get("type", "")
+
+    if block_type == "text":
+        return block.get("text", "")
+
+    elif block_type == "thinking":
+        thinking = block.get("thinking", "")
+        return f"<details>\n<summary>Thinking</summary>\n\n{thinking}\n\n</details>"
+
+    elif block_type == "image":
+        return "[Image embedded in original transcript]"
+
+    elif block_type == "tool_use":
+        tool_name = block.get("name", "Unknown tool")
+        tool_input = block.get("input", {})
+
+        if tool_name == "TodoWrite":
+            todos = tool_input.get("todos", [])
+            lines = [f"**TodoWrite**\n"]
+            for todo in todos:
+                status = todo.get("status", "pending")
+                content = todo.get("content", "")
+                if status == "completed":
+                    lines.append(f"- [x] {content}")
+                elif status == "in_progress":
+                    lines.append(f"- [ ] {content} *(in progress)*")
+                else:
+                    lines.append(f"- [ ] {content}")
+            return "\n".join(lines)
+
+        if tool_name == "Write":
+            file_path = tool_input.get("file_path", "Unknown file")
+            content = tool_input.get("content", "")
+            return f"**Write** `{file_path}`\n\n```\n{content}\n```"
+
+        if tool_name == "Edit":
+            file_path = tool_input.get("file_path", "Unknown file")
+            old_string = tool_input.get("old_string", "")
+            new_string = tool_input.get("new_string", "")
+            replace_all = tool_input.get("replace_all", False)
+            header = f"**Edit** `{file_path}`"
+            if replace_all:
+                header += " *(replace all)*"
+            return f"{header}\n\n```diff\n- {old_string}\n+ {new_string}\n```"
+
+        if tool_name == "Bash":
+            command = tool_input.get("command", "")
+            description = tool_input.get("description", "")
+            header = f"**Bash**"
+            if description:
+                header += f": {description}"
+            return f"{header}\n\n```bash\n{command}\n```"
+
+        display_input = {k: v for k, v in tool_input.items() if k != "description"}
+        input_json = json.dumps(display_input, indent=2, ensure_ascii=False)
+        description = tool_input.get("description", "")
+        header = f"**{tool_name}**"
+        if description:
+            header += f": {description}"
+        return f"{header}\n\n```json\n{input_json}\n```"
+
+    elif block_type == "tool_result":
+        content = block.get("content", "")
+        is_error = block.get("is_error", False)
+        prefix = "**Error:**\n" if is_error else ""
+
+        if isinstance(content, str):
+            return f"{prefix}```\n{content}\n```"
+        elif isinstance(content, list):
+            parts = []
+            for item in content:
+                if isinstance(item, dict):
+                    if item.get("type") == "text":
+                        parts.append(item.get("text", ""))
+                    elif item.get("type") == "image":
+                        parts.append("[Image embedded in original transcript]")
+                    else:
+                        parts.append(json.dumps(item, indent=2, ensure_ascii=False))
+                else:
+                    parts.append(str(item))
+            result = "\n".join(parts)
+            return f"{prefix}```\n{result}\n```"
+        else:
+            return (
+                f"{prefix}```\n{json.dumps(content, indent=2, ensure_ascii=False)}\n```"
+            )
+
+    else:
+        return f"```json\n{json.dumps(block, indent=2, ensure_ascii=False)}\n```"
+
+
 def render_user_message_content(message_data):
     content = message_data.get("content", "")
     if isinstance(content, str):
