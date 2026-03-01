@@ -842,8 +842,6 @@ def render_content_block(block):
 
 def _md_fence(content, lang=""):
     """Return a fenced code block, using enough backticks to avoid breaking on inner fences."""
-    import re
-
     runs = re.findall(r"`{3,}", content)
     max_run = max((len(r) for r in runs), default=0)
     ticks = "`" * max(3, max_run + 1)
@@ -1602,46 +1600,10 @@ def generate_markdown(json_path, output_dir, github_repo=None):
 
     Returns the Path to the generated .md file.
     """
-    output_dir = Path(output_dir)
-    output_dir.mkdir(exist_ok=True)
-
     data = parse_session_file(json_path)
-    loglines = data.get("loglines", [])
-
-    if github_repo is None:
-        github_repo = detect_github_repo(loglines)
-
-    conversations = _group_conversations(loglines)
-    md_parts = []
-
-    for conv in conversations:
-        for log_type, message_json, timestamp in conv["messages"]:
-            if not message_json:
-                continue
-            try:
-                message_data = json.loads(message_json)
-            except json.JSONDecodeError:
-                continue
-
-            if log_type == "user":
-                if is_tool_result_message(message_data):
-                    role = "Tool reply"
-                else:
-                    role = "User"
-                md_parts.append(f"### {role}")
-                md_parts.append(f"*{timestamp}*\n")
-                md_parts.append(_render_message_content_markdown(message_data))
-            elif log_type == "assistant":
-                md_parts.append("### Assistant")
-                md_parts.append(f"*{timestamp}*\n")
-                md_parts.append(_render_message_content_markdown(message_data))
-
-        md_parts.append("---\n")
-
-    markdown_content = "\n\n".join(md_parts)
-    md_path = output_dir / "transcript.md"
-    md_path.write_text(markdown_content, encoding="utf-8")
-    return md_path
+    return generate_markdown_from_session_data(
+        data, output_dir, github_repo=github_repo
+    )
 
 
 def generate_markdown_from_session_data(session_data, output_dir, github_repo=None):
@@ -1653,10 +1615,6 @@ def generate_markdown_from_session_data(session_data, output_dir, github_repo=No
     output_dir.mkdir(exist_ok=True, parents=True)
 
     loglines = session_data.get("loglines", [])
-
-    if github_repo is None:
-        github_repo = detect_github_repo(loglines)
-
     conversations = _group_conversations(loglines)
     md_parts = []
 
@@ -1798,13 +1756,7 @@ def local_cmd(
 
     if use_markdown:
         md_path = generate_markdown(session_file, output, github_repo=repo)
-        click.echo(f"Generated {md_path.resolve()}")
-        if gist:
-            click.echo("Creating GitHub gist...")
-            _gist_id, gist_url = create_gist(output, file_glob="*.md")
-            click.echo(f"Gist: {gist_url}")
-        elif open_browser or auto_open:
-            open_in_editor(md_path.resolve())
+        _handle_markdown_output(md_path, output, gist, open_browser, auto_open)
     else:
         generate_html(session_file, output, github_repo=repo)
 
@@ -1835,11 +1787,25 @@ def local_cmd(
 
 def open_in_editor(file_path):
     """Open a file in the user's preferred editor, or system default."""
-    editor = os.environ.get("EDITOR") or os.environ.get("VISUAL")
+    import shlex
+
+    editor = os.environ.get("VISUAL") or os.environ.get("EDITOR")
     if editor:
-        subprocess.run([editor, str(file_path)])
+        parts = shlex.split(editor)
+        subprocess.run(parts + [str(file_path)])
     else:
         click.launch(str(file_path))
+
+
+def _handle_markdown_output(md_path, output_dir, gist, open_browser, auto_open):
+    """Handle CLI output after generating a markdown file."""
+    click.echo(f"Generated {md_path.resolve()}")
+    if gist:
+        click.echo("Creating GitHub gist...")
+        _gist_id, gist_url = create_gist(output_dir, file_glob="*.md")
+        click.echo(f"Gist: {gist_url}")
+    elif open_browser or auto_open:
+        open_in_editor(md_path.resolve())
 
 
 def is_url(path):
@@ -1957,13 +1923,7 @@ def json_cmd(
 
     if use_markdown:
         md_path = generate_markdown(json_file_path, output, github_repo=repo)
-        click.echo(f"Generated {md_path.resolve()}")
-        if gist:
-            click.echo("Creating GitHub gist...")
-            _gist_id, gist_url = create_gist(output, file_glob="*.md")
-            click.echo(f"Gist: {gist_url}")
-        elif open_browser or auto_open:
-            open_in_editor(md_path.resolve())
+        _handle_markdown_output(md_path, output, gist, open_browser, auto_open)
     else:
         generate_html(json_file_path, output, github_repo=repo)
 
@@ -2315,13 +2275,7 @@ def web_cmd(
         md_path = generate_markdown_from_session_data(
             session_data, output, github_repo=repo
         )
-        click.echo(f"Generated {md_path.resolve()}")
-        if gist:
-            click.echo("Creating GitHub gist...")
-            _gist_id, gist_url = create_gist(output, file_glob="*.md")
-            click.echo(f"Gist: {gist_url}")
-        elif open_browser or auto_open:
-            open_in_editor(md_path.resolve())
+        _handle_markdown_output(md_path, output, gist, open_browser, auto_open)
     else:
         click.echo(f"Generating HTML in {output}/...")
         generate_html_from_session_data(session_data, output, github_repo=repo)
