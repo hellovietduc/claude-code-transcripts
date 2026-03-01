@@ -1760,6 +1760,77 @@ class TestMarkdownRendering:
         assert "First task" in result
         assert "Second task" in result
 
+    def test_tool_result_containing_code_block(self):
+        """Tool result with triple backticks must not break the markdown fence."""
+        block = {
+            "type": "tool_result",
+            "tool_use_id": "toolu_001",
+            "content": "Here is code:\n```python\nprint('hello')\n```\nDone.",
+        }
+        result = render_content_block_markdown(block)
+        assert "print('hello')" in result
+        # The outer fence must use more backticks than the inner fence
+        lines = result.split("\n")
+        fence_lines = [
+            l
+            for l in lines
+            if l.strip().startswith("`")
+            and l.strip().rstrip("`") == l.strip().rstrip("`").rstrip()
+        ]
+        # Simpler check: the result should start with >3 backticks if content has ```
+        first_line = lines[0].strip()
+        assert first_line.startswith(
+            "````"
+        ), f"Outer fence should use >=4 backticks, got: {first_line}"
+
+    def test_tool_result_list_containing_code_block(self):
+        """Tool result (list form) with triple backticks must not break the fence."""
+        block = {
+            "type": "tool_result",
+            "tool_use_id": "toolu_001",
+            "content": [{"type": "text", "text": "```\nsome code\n```"}],
+        }
+        result = render_content_block_markdown(block)
+        assert "some code" in result
+        first_line = result.split("\n")[0].strip()
+        assert first_line.startswith(
+            "````"
+        ), f"Outer fence should use >=4 backticks, got: {first_line}"
+
+    def test_tool_use_write_containing_code_block(self):
+        """Write tool with file content containing backticks must not break the fence."""
+        block = {
+            "type": "tool_use",
+            "id": "toolu_001",
+            "name": "Write",
+            "input": {
+                "file_path": "/tmp/readme.md",
+                "content": "# Hello\n\n```python\nprint('hi')\n```\n",
+            },
+        }
+        result = render_content_block_markdown(block)
+        assert "print('hi')" in result
+        # Find the opening fence line (after the **Write** header)
+        lines = result.split("\n")
+        fence_lines = [
+            l for l in lines if l.strip().startswith("`") and len(l.strip()) > 0
+        ]
+        outer_fence = fence_lines[0].strip()
+        assert (
+            len(outer_fence.rstrip()) >= 4
+        ), f"Outer fence should use >=4 backticks, got: {outer_fence}"
+
+    def test_tool_use_bash_containing_code_block(self):
+        """Bash tool with command containing backticks must not break the fence."""
+        block = {
+            "type": "tool_use",
+            "id": "toolu_001",
+            "name": "Bash",
+            "input": {"command": "echo '```hello```'"},
+        }
+        result = render_content_block_markdown(block)
+        assert "echo" in result
+
 
 class TestGenerateMarkdown:
     """Tests for generate_markdown function."""

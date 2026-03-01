@@ -840,6 +840,16 @@ def render_content_block(block):
         return format_json(block)
 
 
+def _md_fence(content, lang=""):
+    """Return a fenced code block, using enough backticks to avoid breaking on inner fences."""
+    import re
+
+    runs = re.findall(r"`{3,}", content)
+    max_run = max((len(r) for r in runs), default=0)
+    ticks = "`" * max(3, max_run + 1)
+    return f"{ticks}{lang}\n{content}\n{ticks}"
+
+
 def render_content_block_markdown(block):
     """Render a single content block as Markdown text."""
     if not isinstance(block, dict):
@@ -878,7 +888,7 @@ def render_content_block_markdown(block):
         if tool_name == "Write":
             file_path = tool_input.get("file_path", "Unknown file")
             content = tool_input.get("content", "")
-            return f"**Write** `{file_path}`\n\n```\n{content}\n```"
+            return f"**Write** `{file_path}`\n\n{_md_fence(content)}"
 
         if tool_name == "Edit":
             file_path = tool_input.get("file_path", "Unknown file")
@@ -888,7 +898,8 @@ def render_content_block_markdown(block):
             header = f"**Edit** `{file_path}`"
             if replace_all:
                 header += " *(replace all)*"
-            return f"{header}\n\n```diff\n- {old_string}\n+ {new_string}\n```"
+            diff_body = f"- {old_string}\n+ {new_string}"
+            return f"{header}\n\n{_md_fence(diff_body, 'diff')}"
 
         if tool_name == "Bash":
             command = tool_input.get("command", "")
@@ -896,7 +907,7 @@ def render_content_block_markdown(block):
             header = f"**Bash**"
             if description:
                 header += f": {description}"
-            return f"{header}\n\n```bash\n{command}\n```"
+            return f"{header}\n\n{_md_fence(command, 'bash')}"
 
         display_input = {k: v for k, v in tool_input.items() if k != "description"}
         input_json = json.dumps(display_input, indent=2, ensure_ascii=False)
@@ -904,7 +915,7 @@ def render_content_block_markdown(block):
         header = f"**{tool_name}**"
         if description:
             header += f": {description}"
-        return f"{header}\n\n```json\n{input_json}\n```"
+        return f"{header}\n\n{_md_fence(input_json, 'json')}"
 
     elif block_type == "tool_result":
         content = block.get("content", "")
@@ -912,7 +923,7 @@ def render_content_block_markdown(block):
         prefix = "**Error:**\n" if is_error else ""
 
         if isinstance(content, str):
-            return f"{prefix}```\n{content}\n```"
+            return f"{prefix}{_md_fence(content)}"
         elif isinstance(content, list):
             parts = []
             for item in content:
@@ -926,14 +937,12 @@ def render_content_block_markdown(block):
                 else:
                     parts.append(str(item))
             result = "\n".join(parts)
-            return f"{prefix}```\n{result}\n```"
+            return f"{prefix}{_md_fence(result)}"
         else:
-            return (
-                f"{prefix}```\n{json.dumps(content, indent=2, ensure_ascii=False)}\n```"
-            )
+            return f"{prefix}{_md_fence(json.dumps(content, indent=2, ensure_ascii=False))}"
 
     else:
-        return f"```json\n{json.dumps(block, indent=2, ensure_ascii=False)}\n```"
+        return _md_fence(json.dumps(block, indent=2, ensure_ascii=False), "json")
 
 
 def render_user_message_content(message_data):
