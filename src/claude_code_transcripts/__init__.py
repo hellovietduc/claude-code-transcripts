@@ -1804,7 +1804,7 @@ def _handle_markdown_output(md_path, output_dir, gist, open_browser, auto_open):
         click.echo("Creating GitHub gist...")
         _gist_id, gist_url = create_gist(output_dir, file_glob="*.md")
         click.echo(f"Gist: {gist_url}")
-    elif open_browser or auto_open:
+    elif open_browser:
         open_in_editor(md_path.resolve())
 
 

@@ -858,3 +858,34 @@ class TestMarkdownFlag:
         )
         assert result.exit_code == 0
         assert not any("vim" in str(c) for c in launched)
+
+    def test_json_markdown_without_open_does_not_open_editor(
+        self, output_dir, monkeypatch
+    ):
+        """Test that --markdown without --open does not open the editor."""
+        jsonl_file = output_dir / "test.jsonl"
+        jsonl_file.write_text(
+            '{"type": "user", "timestamp": "2025-01-01T10:00:00.000Z", "message": {"role": "user", "content": "Hello"}}\n'
+        )
+
+        launched = []
+
+        def mock_run(*args, **kwargs):
+            import subprocess
+
+            cmd = args[0] if args else kwargs.get("args", [])
+            launched.append(cmd)
+            return subprocess.CompletedProcess(args=cmd, returncode=0)
+
+        import subprocess
+
+        monkeypatch.setattr(subprocess, "run", mock_run)
+        monkeypatch.setenv("EDITOR", "vim")
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["json", str(jsonl_file), "--markdown"],
+        )
+        assert result.exit_code == 0
+        assert not any("vim" in str(c) for c in launched)
